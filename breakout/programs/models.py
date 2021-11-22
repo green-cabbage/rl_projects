@@ -36,7 +36,8 @@ class BreakOutAgent(nn.Module):
         self,
         conv_params : List[Tuple[int]],
         fcn_params : Tuple[int],
-        device : str):
+        device : str,
+        activation = "relu"):
         """
         params:
         conv_params: a list of tuples for Conv2ds. Each tuple is for one conv2d
@@ -46,7 +47,8 @@ class BreakOutAgent(nn.Module):
         the order the tuples in parameters are listed
 
         fcn_params: tuple of dimensions for linear layers
-        the tuple represents: (flatten_nodes, hidden_nodes, output_nodes)
+        the tuple represents: 
+        (flatten_nodes, hidden_nodes, output_nodes, layer_depth)
         flatten_nodes is the number of nodes of the flattened conv_block
         output. hidden_nodes is the number of nodes in the hidden layer.
         output_nodes is the number of nodes (equivalent to number of 
@@ -55,14 +57,22 @@ class BreakOutAgent(nn.Module):
         got time for that
         """
         super(BreakOutAgent, self).__init__()
-        self.conv_block_ = ConvBlock(conv_params)
+        # intialize conv block
+        self.conv_block_ = ConvBlock(
+            conv_params, 
+            activation = activation
+        )
+        # initialize fcn block
+        flatten_nodes, hidden_nodes, output_nodes, layer_depth = fcn_params
+        # flatten_nodes == input_nodes
         fcn_modules = []
         fcn_modules = fillModules(
-            input_dim: int,
-            output_dim: int,
-            layer_depth: int,
-            hidden_nodes: int,
-            device: str,
+            flatten_nodes,
+            output_nodes,
+            layer_depth,
+            hidden_nodes,
+            device,
+            activation = activation
         )
         self.fcn_block_ = nn.Sequential(*fcn_modules)
 
