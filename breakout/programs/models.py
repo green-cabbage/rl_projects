@@ -77,10 +77,13 @@ class BreakOutAgent(nn.Module):
         self.fcn_block_ = nn.Sequential(*fcn_modules)
 
 
-    def forward(self, X):
+    def forward(self, X, entropy=0):
         # pass through conv block
         X = self.conv_block_(X)
         # flatten except the batch dim
         X = X.flatten(start_dim = 1)
         X = self.fcn_block_(X)
+        # if entropy > 0:
+        #     X += entropy
+        #     X = t
         return X
