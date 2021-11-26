@@ -6,11 +6,15 @@ https://keras.io/examples/rl/deep_q_network_breakout/
 and dqn breakout paper
 https://arxiv.org/pdf/1312.5602.pdf
 """
-
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import numpy as np
 from typing import TypeVar, List, Tuple
 
 gp_data = TypeVar("Gameplay Data")
 tch_tensor = TypeVar("tch_tensor")
+np_array = TypeVar("np_array")
 
 class GameplayData():
     """
@@ -60,27 +64,49 @@ class GameplayData():
 #     game compatible action from the given policy
 #     """
 
+def filterState(state : np_array, dev= "cpu") -> tch_tensor:
+    """
+    we assume the breakout state is np array of
+    (210, 160, 3) shape
+    we only take one channel, reshape it to (1,210, 160)
+    and turn all non zero values to one before
+    returining the array as torch tensor
+    """
+    state_filtered = state[:,:,0].reshape((1,-1))
+    state_filtered[state_filtered != 0] = 1
+    return torch.tensor(state_filtered, device = dev)
 
-def playGameForTraining(model, env, game_step_limit):
+def playGameForTraining(
+    model, 
+    env, 
+    game_step_limit, 
+    dev = "cpu"):
     """
     """
     gameplay_data = GameplayData()
     state = env.reset()
+    # filter the state
+    state = filterState(state, dev = dev)
 
     counter = 0
     while True:
         counter += 1
-        policy = model(state)
+        policy = model(torch.from_numpy(state)).to(dev)
         print("policy shape: ", policy.shape)
         policy = policy.cpu().numpy()
         # floor the negative values to zero
         policy = policy[policy < 0] = 0
-        action = np.random.choice(num_actions, p = policy)
+        print("policy shape: ", policy.shape)
+        action = np.random.choice(len(policy), p = policy)
         next_state, reward, done, _ = env.step(action)
+        # filter the next state
+        next_state = filterState(next_state, dev = dev)
+
+
         # take gameplay data
         gameplay_data.state_history.append(state)
         gameplay_data.next_state_history.append(next_state)
-        gameplay_data.action_history.append(np_action)
+        gameplay_data.action_history.append(action)
         gameplay_data.reward_history.append(reward)
         gameplay_data.done_history.append(done)
 
@@ -92,28 +118,49 @@ def playGameForTraining(model, env, game_step_limit):
         
         if done:
             state = env.reset()
+            # filter the state
+            state = filterState(state, dev = dev)
+    return gameplay_data
 
 def loss_fn(
     prediction : tch_tensor,
     label : tch_tensor):
     """
     loss function used in model training
-    return: loss function scalar (idk what you call it)
+    return: loss scalar value (idk the official name)
     """
     return nn.MSELoss()(prediction, label)
 
-def preprocessGameplayData(gameplay_data : gp_data, sample_size : int):
+def preprocessGameplayData(
+    gameplay_data : gp_data,
+    sample_size : int,
+    dev = "cpu"):
     """
     preprocess the gameplay data for training
     """
     # random sample from gameplay_data
-    sample_indices = np.random.choice(range(len(gameplay_data)), size=sample_size)
+    sample_idxs = np.random.choice(range(len(gameplay_data)), size=sample_size)
 
-    state_sample = np.array([gameplay_data.state_history[idx] for idx in sample_indices])
-    next_state_sample = np.array([gameplay_data.next_state_history[idx] for idx in sample_indices])
-    action_sample = np.array([gameplay_data.action_history[idx] for idx in sample_indices])
-    reward_sample = np.array([gameplay_data.reward_history[idx] for idx in sample_indices])
-    done_sample = np.array([gameplay_data.done_history[idx] for idx in sample_indices])
+    state_sample = torch.tensor(
+        [gameplay_data.state_history[idx] for idx in sample_idxs],
+        device = dev
+    )
+    next_state_sample = torch.tensor(
+        [gameplay_data.next_state_history[idx] for idx in sample_idxs],
+        device = dev
+    )
+    action_sample = torch.tensor(
+        [gameplay_data.action_history[idx] for idx in sample_idxs],
+        device = dev
+    )
+    reward_sample = torch.tensor(
+        [gameplay_data.reward_history[idx] for idx in sample_idxs],
+        device = dev
+    )
+    done_sample = torch.tensor(
+        [gameplay_data.done_history[idx] for idx in sample_idxs],
+        device = dev
+    )
     
     # initialize new preprocessed gameplay data
     # except now the values are torch tensors
@@ -134,8 +181,6 @@ def trainOneBatch(
     params:
     preprocessed_gameplay_data
     """
-    
-
 
     # Build the updated Q-values for the sampled future states
     next_state_array = preprocessed_gameplay_data.next_state_history
@@ -164,13 +209,38 @@ def trainOneBatch(
 
     optim.zero_grad()
     
-    
-    q_pred = model()
+    state_array = preprocessed_gameplay_data.state_history
+    q_pred = model(state_array)
     # mask so only the q predictions of actual actions taken are given
-    masks = 
+    action_array = preprocessed_gameplay_data.action_history
+    masks = F.one_hot(action_array, num_classes = model.num_actions)
     final_prediction = torch.multiply(q_pred, masks)
     loss = loss_fn(final_prediction, updated_q_values)
     loss.backward()
     optim.step()
-        
-        
+
+
+def train(
+    model,
+    nepochs,
+    saveEveryN, 
+    game_step_limit,
+    sample_size,
+    dev):
+    # initialize model and optim
+    for epoch in range(nepochs):
+        gameplay_data = playGameForTraining(
+            model, 
+            env,
+            game_step_limit, 
+            dev = dev)
+        preprocessed_gameplay_data = preprocessGameplayData(
+            gameplay_data, 
+            sample_size, 
+            dev = dev
+        )
+        trainOneBatch(model, optim, preprocessed_gameplay_data)
+
+# def test():
+#     """
+#     """

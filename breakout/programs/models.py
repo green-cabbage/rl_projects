@@ -1,9 +1,10 @@
 from utils import addActivation, fillModules
 import torch 
 import torch.nn as nn 
+from typing import TypeVar, List, Tuple
 
 class ConvBlock(nn.Module):
-    """
+    """ 
     Convolutional portion of the rl model
     """
     def __init__(
@@ -64,9 +65,11 @@ class BreakOutAgent(nn.Module):
         )
         # initialize fcn block
         flatten_nodes, hidden_nodes, output_nodes, layer_depth = fcn_params
+        self.num_actions = output_nodes
         # flatten_nodes == input_nodes
         fcn_modules = []
         fcn_modules = fillModules(
+            [],
             flatten_nodes,
             output_nodes,
             layer_depth,
