@@ -11,6 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import TypeVar, List, Tuple
+from datetime import datetime
+import os
 # import sklearn.preprocessing as pre 
 
 gp_data = TypeVar("Gameplay Data")
@@ -48,6 +50,14 @@ class GameplayData():
         same length
         """
         return len(self.state_history)
+    
+    def __del__(self):
+        del self.state_history
+        del self.next_state_history
+        del self.action_history
+        del self.reward_history
+        del self.done_history
+
 
 # def getGameAction(policy, entropy, env, game_state):
 #     """
@@ -184,6 +194,7 @@ def preprocessGameplayData(
     dev = "cpu"):
     """
     preprocess the gameplay data for training
+    delte gameplay_data when done
     """
     # random sample from gameplay_data
     sample_idxs = np.random.choice(len(gameplay_data), size=sample_size)
@@ -221,6 +232,8 @@ def preprocessGameplayData(
         reward_history = reward_sample,
         done_history = done_sample 
     )
+    # delete preprocessed_gameplay_data
+    del gameplay_data
     return preprocessed_gameplay_data
     
 def trainOneBatch(
@@ -304,9 +317,14 @@ def train(
     # initialize optim
     optim = torch.optim.Adam(model.parameters(), lr=lr)
     epsilon_min = 0.05
-    epsilon_counter = 1.0
+    epsilon_counter = 0.6
+    save_path = \
+        f"../results/modelSaves/GSL{game_step_limit}_SamS{sample_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
     for epoch in range(nepochs):
-        epsilon_counter -= 0.02
+        print("epoch: ", epoch)
+        epsilon_counter -= 0.002
         epsilon = max(epsilon_counter, epsilon_min)
         # we intreprete epsilon == 0 being no exploration
         # and epsilon == 1 being always exploration
@@ -322,6 +340,14 @@ def train(
             dev = dev
         )
         trainOneBatch(model, optim, preprocessed_gameplay_data, gamma)
+        # delete preprocessed_gameplay_data to save memory
+        del preprocessed_gameplay_data
+
+        if epoch%saveEveryN == 0:
+            model_save_path = save_path + f"/Epoch{epoch}"
+            if not os.path.exists(model_save_path):
+                os.mkdir(model_save_path)
+            torch.save(model,model_save_path + "/model.pt")
 
 # def test():
 #     """

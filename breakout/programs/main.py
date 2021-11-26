@@ -29,10 +29,10 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5', render_mode='human')
-    nepochs = 200
-    game_step_limit =  200
+    nepochs = 2000
+    game_step_limit =  150
     sample_size = game_step_limit //2
-    saveEveryN = 5
+    saveEveryN = 10
     lr = 0.0001
     train(
         model,
