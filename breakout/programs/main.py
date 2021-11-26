@@ -3,9 +3,11 @@ from pipeline import train
 import gym
 
 def main():
-    # input shape: 210x160, image with 3 channels
+    # input shape: 210x160, image with 3 channels, but we 
+    # are filtering to just 1 channel
+    n_channels = 1
     conv_params = [
-        (3, 16, 8, 4),
+        (n_channels, 16, 8, 4),
         (16, 32, 4, 2),
     ]
     flatten_nodes = 32*24*18
@@ -27,12 +29,19 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5', render_mode='human')
-    game_step_limit
-    def train(
-    model,
-    nepochs,
-    saveEveryN, 
-    dev)
+    nepochs = 2
+    game_step_limit =  100
+    sample_size = game_step_limit //2
+    saveEveryN = 5
+    train(
+        model,
+        env,
+        nepochs,
+        saveEveryN, 
+        game_step_limit,
+        sample_size,
+        dev
+    )
     env.close()
 
 

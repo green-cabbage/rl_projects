@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import TypeVar, List, Tuple
+import sklearn.preprocessing as pre 
 
 gp_data = TypeVar("Gameplay Data")
 tch_tensor = TypeVar("tch_tensor")
@@ -38,7 +39,7 @@ class GameplayData():
         self.state_history = state_history
         self.next_state_history = next_state_history
         self.action_history = action_history
-        self.reward_history = reward_history]
+        self.reward_history = reward_history
         self.done_history = done_history
 
     def __len__():
@@ -72,9 +73,30 @@ def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     and turn all non zero values to one before
     returining the array as torch tensor
     """
-    state_filtered = state[:,:,0].reshape((1,-1))
+    print("raw state shape: ", state.shape)
+    H, W, C = state.shape
+    state_filtered = state[:,:,0].reshape((1, 1, H, W)) 
     state_filtered[state_filtered != 0] = 1
-    return torch.tensor(state_filtered, device = dev)
+    # saving filter for test
+    # np.savetxt(f"state_filtered.csv", state_filtered[0,0,:,:], delimiter=",")
+    return torch.tensor(state_filtered, device = dev).float()
+
+def takeRandomAction(policy: tch_tensor, epsilon =0):
+    """
+    we assume policy shape == (1, model.num_actions)
+    in the future
+    """
+    print("original policy: ", policy)
+    with torch.no_grad():
+        np_policy = policy.cpu().numpy()
+    # floor the negative values to zero and normalize
+    np_policy[np_policy < 0] = 0
+    np_policy = pre.normalize(np_policy, axis=0)
+    # turn to one dimensional array
+    np_policy = np_policy[0]
+    print("normalized policy: ", np_policy)
+    action = np.random.choice(len(np_policy), p = np_policy)
+    return action
 
 def playGameForTraining(
     model, 
@@ -84,23 +106,27 @@ def playGameForTraining(
     """
     """
     gameplay_data = GameplayData()
-    state = env.reset()
+    raw_state = env.reset()
     # filter the state
-    state = filterState(state, dev = dev)
+    state = filterState(raw_state, dev = dev)
 
     counter = 0
     while True:
         counter += 1
-        policy = model(torch.from_numpy(state)).to(dev)
+        print("state shape: ", state.shape)
+        policy = model(state)
+        
         print("policy shape: ", policy.shape)
-        policy = policy.cpu().numpy()
-        # floor the negative values to zero
-        policy = policy[policy < 0] = 0
-        print("policy shape: ", policy.shape)
-        action = np.random.choice(len(policy), p = policy)
-        next_state, reward, done, _ = env.step(action)
+        print("policy[0] shape: ", policy[0].shape)
+        
+        
+       
+            
+            
+        action = takeRandomAction(policy)
+        raw_next_state, reward, done, _ = env.step(action)
         # filter the next state
-        next_state = filterState(next_state, dev = dev)
+        next_state = filterState(raw_next_state, dev = dev)
 
 
         # take gameplay data
@@ -117,9 +143,9 @@ def playGameForTraining(
             break
         
         if done:
-            state = env.reset()
+            raw_state = env.reset()
             # filter the state
-            state = filterState(state, dev = dev)
+            state = filterState(raw_state, dev = dev)
     return gameplay_data
 
 def loss_fn(
@@ -222,6 +248,7 @@ def trainOneBatch(
 
 def train(
     model,
+    env,
     nepochs,
     saveEveryN, 
     game_step_limit,
