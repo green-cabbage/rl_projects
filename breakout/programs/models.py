@@ -10,7 +10,8 @@ class ConvBlock(nn.Module):
     def __init__(
         self,
         parameters : List[Tuple[int]],
-        activation = "relu"):
+        activation = "relu",
+        device = "cpu"):
         """
         params:
         parameters: a list of tuples for Conv2ds. Each tuple is for one conv2d
@@ -27,7 +28,7 @@ class ConvBlock(nn.Module):
             conv = nn.Conv2d(in_channels, out_channels, kernel_size, stride=stride)
             modules.append(conv)
             modules = addActivation(modules, activation)
-        self.block_ = nn.Sequential(*modules)
+        self.block_ = nn.Sequential(*modules).to(device)
         
     def forward(self, X):
         return self.block_(X)
@@ -61,7 +62,8 @@ class BreakOutAgent(nn.Module):
         # intialize conv block
         self.conv_block_ = ConvBlock(
             conv_params, 
-            activation = activation
+            activation = activation,
+            device = device
         )
         # initialize fcn block
         flatten_nodes, hidden_nodes, output_nodes, layer_depth = fcn_params

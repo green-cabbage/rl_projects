@@ -11,7 +11,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import TypeVar, List, Tuple
-import sklearn.preprocessing as pre 
+# import sklearn.preprocessing as pre 
 
 gp_data = TypeVar("Gameplay Data")
 tch_tensor = TypeVar("tch_tensor")
@@ -42,7 +42,7 @@ class GameplayData():
         self.reward_history = reward_history
         self.done_history = done_history
 
-    def __len__():
+    def __len__(self):
         """
         all the elements in this class should have the 
         same length
@@ -73,7 +73,7 @@ def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     and turn all non zero values to one before
     returining the array as torch tensor
     """
-    print("raw state shape: ", state.shape)
+    # print("raw state shape: ", state.shape)
     H, W, C = state.shape
     state_filtered = state[:,:,0].reshape((1, 1, H, W)) 
     state_filtered[state_filtered != 0] = 1
@@ -86,46 +86,67 @@ def takeRandomAction(policy: tch_tensor, epsilon =0):
     we assume policy shape == (1, model.num_actions)
     in the future
     """
-    print("original policy: ", policy)
+    # print("original policy: ", policy)
     with torch.no_grad():
         np_policy = policy.cpu().numpy()
     # floor the negative values to zero and normalize
     np_policy[np_policy < 0] = 0
-    np_policy = pre.normalize(np_policy, axis=0)
+    # we can now assume np policy is all positive
+    # normalize
+    sum = np.sum(np_policy)
+
+    if sum == 0 or np.random.random() < epsilon:
+        # give uniform distribution for 100% 
+        # random action
+        # print("total random action")
+        num_actions = np_policy.shape[-1]
+        np_policy[:] = 1/num_actions
+    else: # normal normalization
+        np_policy = np_policy / sum 
     # turn to one dimensional array
     np_policy = np_policy[0]
-    print("normalized policy: ", np_policy)
+    # print("normalized policy: ", np_policy)
     action = np.random.choice(len(np_policy), p = np_policy)
+    # print("action: ", action)
     return action
 
 def playGameForTraining(
     model, 
     env, 
     game_step_limit, 
-    dev = "cpu"):
+    dev = "cpu",
+    epsilon = 0):
     """
     """
+    print("epsilon: ", epsilon)
     gameplay_data = GameplayData()
+    # do reset twice bc there's a bug where
+    # if you do it once, it sometimes doesn't give
+    # the ball
+    raw_state = env.reset()
     raw_state = env.reset()
     # filter the state
     state = filterState(raw_state, dev = dev)
-
+    print("starting playGameForTraining")
     counter = 0
     while True:
         counter += 1
-        print("state shape: ", state.shape)
+        # print("state shape: ", state.shape)
         policy = model(state)
         
-        print("policy shape: ", policy.shape)
-        print("policy[0] shape: ", policy[0].shape)
+        # print("policy shape: ", policy.shape)
+        # print("policy[0] shape: ", policy[0].shape)
         
         
        
             
-            
-        action = takeRandomAction(policy)
+
+        action = takeRandomAction(policy, epsilon = epsilon)
         raw_next_state, reward, done, _ = env.step(action)
         # filter the next state
+        if done:
+            print("done!")
+
         next_state = filterState(raw_next_state, dev = dev)
 
 
@@ -165,16 +186,14 @@ def preprocessGameplayData(
     preprocess the gameplay data for training
     """
     # random sample from gameplay_data
-    sample_idxs = np.random.choice(range(len(gameplay_data)), size=sample_size)
+    sample_idxs = np.random.choice(len(gameplay_data), size=sample_size)
 
-    state_sample = torch.tensor(
-        [gameplay_data.state_history[idx] for idx in sample_idxs],
-        device = dev
-    )
-    next_state_sample = torch.tensor(
-        [gameplay_data.next_state_history[idx] for idx in sample_idxs],
-        device = dev
-    )
+    # for element in [gameplay_data.done_history[idx] for idx in sample_idxs]:
+    #     print("element type: ", type(element))
+
+    # print("gameplay_data.state_history: ", gameplay_data.state_history)
+    state_sample = torch.cat([gameplay_data.state_history[idx] for idx in sample_idxs])
+    next_state_sample = torch.cat([gameplay_data.next_state_history[idx] for idx in sample_idxs])
     action_sample = torch.tensor(
         [gameplay_data.action_history[idx] for idx in sample_idxs],
         device = dev
@@ -184,10 +203,15 @@ def preprocessGameplayData(
         device = dev
     )
     done_sample = torch.tensor(
-        [gameplay_data.done_history[idx] for idx in sample_idxs],
+        [float(gameplay_data.done_history[idx]) for idx in sample_idxs],
         device = dev
     )
-    
+    # print("state_sample shape: ", state_sample.shape)
+    # print("state_sample shape: ", next_state_sample.shape)
+    # print("action_sample shape: ", action_sample.shape)
+    # print("reward_sample shape: ", reward_sample.shape)
+    # print("done_sample shape: ", done_sample.shape)
+
     # initialize new preprocessed gameplay data
     # except now the values are torch tensors
     preprocessed_gameplay_data = GameplayData(
@@ -202,7 +226,8 @@ def preprocessGameplayData(
 def trainOneBatch(
     model,
     optim,
-    preprocessed_gameplay_data: gp_data):
+    preprocessed_gameplay_data: gp_data,
+    gamma : float):
     """
     params:
     preprocessed_gameplay_data
@@ -218,8 +243,24 @@ def trainOneBatch(
     # Q value = reward + discount factor * expected future reward
     # expected future reward == max q value from the next state
     rewards_array =  preprocessed_gameplay_data.reward_history
-    updated_q_values = rewards_array + gamma * torch.max(next_state_q_values, dim=1)
+    done_array = preprocessed_gameplay_data.done_history
+    # print("next_state_q_values shape: ", next_state_q_values)
+    # print("max(next_state_q_values, dim=1): ", torch.max(next_state_q_values, dim=1))
+    max_vals, _ = torch.max(next_state_q_values, dim=1)
+    
+    # print("max_vals shape: ", max_vals.shape) 
+    # print("rewards_array shape: ", rewards_array.shape)
+    # print("done_array shape: ", done_array.shape)
 
+    
+    updated_q_values = rewards_array + gamma *  max_vals
+    # multiply (1-done_array) to get discounted values when it's not done
+    # and make reward -1 when the game has ended
+    print("done_array: ", done_array)
+    print("updated_q_values b4 done array mult: ", updated_q_values)
+    updated_q_values = updated_q_values*(1-done_array) -  done_array
+
+    print("updated_q_values after: ", updated_q_values)
 
     """
     updated_q_values == y from the deepmind paper
@@ -240,8 +281,12 @@ def trainOneBatch(
     # mask so only the q predictions of actual actions taken are given
     action_array = preprocessed_gameplay_data.action_history
     masks = F.one_hot(action_array, num_classes = model.num_actions)
-    final_prediction = torch.multiply(q_pred, masks)
+    # print("q_pred.shape: ", q_pred.shape)
+    # print("masks shape: ", masks.shape)
+    final_prediction = torch.sum(torch.multiply(q_pred, masks), dim = 1)
+    print("final_prediction shape: ", final_prediction.shape)
     loss = loss_fn(final_prediction, updated_q_values)
+    print("loss value: ", loss)
     loss.backward()
     optim.step()
 
@@ -253,20 +298,30 @@ def train(
     saveEveryN, 
     game_step_limit,
     sample_size,
-    dev):
-    # initialize model and optim
+    dev,
+    lr = 0.001,
+    gamma = 0.99):
+    # initialize optim
+    optim = torch.optim.Adam(model.parameters(), lr=lr)
+    epsilon_min = 0.05
+    epsilon_counter = 1.0
     for epoch in range(nepochs):
+        epsilon_counter -= 0.02
+        epsilon = max(epsilon_counter, epsilon_min)
+        # we intreprete epsilon == 0 being no exploration
+        # and epsilon == 1 being always exploration
         gameplay_data = playGameForTraining(
-            model, 
+            model,
             env,
             game_step_limit, 
-            dev = dev)
+            dev = dev,
+            epsilon = epsilon)
         preprocessed_gameplay_data = preprocessGameplayData(
             gameplay_data, 
             sample_size, 
             dev = dev
         )
-        trainOneBatch(model, optim, preprocessed_gameplay_data)
+        trainOneBatch(model, optim, preprocessed_gameplay_data, gamma)
 
 # def test():
 #     """

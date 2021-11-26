@@ -12,7 +12,7 @@ def main():
     ]
     flatten_nodes = 32*24*18
     hidden_nodes = 256
-    output_nodes = 4
+    output_nodes = 18
     layer_depth = 3 # one hidden layer
     fcn_params = (
         flatten_nodes,
@@ -21,7 +21,7 @@ def main():
         layer_depth
     )
     activation = "relu"
-    dev = "cpu"
+    dev = "cuda"
     model = BreakOutAgent(conv_params,
         fcn_params,
         dev,
@@ -29,10 +29,11 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5', render_mode='human')
-    nepochs = 2
-    game_step_limit =  100
+    nepochs = 200
+    game_step_limit =  200
     sample_size = game_step_limit //2
     saveEveryN = 5
+    lr = 0.0001
     train(
         model,
         env,
@@ -40,7 +41,8 @@ def main():
         saveEveryN, 
         game_step_limit,
         sample_size,
-        dev
+        dev,
+        lr = lr
     )
     env.close()
 
