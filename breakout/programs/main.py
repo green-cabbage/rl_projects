@@ -34,6 +34,10 @@ def main():
     sample_size = game_step_limit //2
     saveEveryN = 10
     lr = 0.0001
+    # save_path = \
+    #     f"../results/modelSaves/GSL{game_step_limit}_SamS{sample_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+    # if not os.path.exists(save_path):
+    #     os.mkdir(save_path)
     train_loop(
         model,
         env,
@@ -42,7 +46,8 @@ def main():
         game_step_limit,
         sample_size,
         dev,
-        lr = lr
+        lr = lr,
+        save_path = save_path
     )
     
     env.close()

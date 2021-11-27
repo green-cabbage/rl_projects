@@ -19,50 +19,6 @@ gp_data = TypeVar("Gameplay Data")
 tch_tensor = TypeVar("tch_tensor")
 np_array = TypeVar("np_array")
 
-# class GameplayData():
-#     """
-#     a simple class that groups
-#     state_history, next_state_history, action_history,
-#     reward_history, done_history
-#     into one clean class variable
-#     We assume the data types of these class member variables
-#     are consistent within the same class instance
-#     However, we also assume that the data type to not be 
-#     static, ie using np arrays or torch tensors instead
-#     of lists as the class member variable type
-#     """
-#     def __init__(
-#         self,
-#         state_history = [],
-#         next_state_history = [],
-#         action_history = [],
-#         reward_history = [],
-#         done_history = [] ):
-#         self.state_history = state_history
-#         self.next_state_history = next_state_history
-#         self.action_history = action_history
-#         self.reward_history = reward_history
-#         self.done_history = done_history
-
-#     def __len__(self):
-#         """
-#         all the elements in this class should have the 
-#         same length
-#         """
-#         return len(self.state_history)
-    
-#     def __del__(self):
-#         # del self.state_history
-#         # del self.next_state_history
-#         # del self.action_history
-#         # del self.reward_history
-#         # del self.done_history
-#         self.state_history = None
-#         self.next_state_history = None
-#         self.action_history = None
-#         self.reward_history = None
-#         self.done_history = None
-
 class GameplayData():
     """
     a simple class that groups
@@ -104,21 +60,6 @@ class GameplayData():
         del self.reward_history
         del self.done_history
 
-# def getGameAction(policy, entropy, env, game_state):
-#     """
-#     params:
-    
-#     policy: np array or torch tensor (haven't decided which)
-#     that represent's the agent model's policy
-#     entropy: the entropy value to take into account when
-#     sampling a action from the given policy
-#     env: game env, probably using this when certain actions
-#     are not allowed according to the game
-#     game_state: game state, probably using this when certain 
-#     actions are not allowed according to the game
-#     returns:
-#     game compatible action from the given policy
-#     """
 
 def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     """
@@ -222,11 +163,6 @@ def playGameForTraining(
         # print("next state shape: ", next_state.shape)
 
         # take gameplay data
-        # gameplay_data.state_history.append(state)
-        # gameplay_data.next_state_history.append(next_state)
-        # gameplay_data.action_history.append(action)
-        # gameplay_data.reward_history.append(reward)
-        # gameplay_data.done_history.append(done)
 
         gameplay_data.state_history[counter] = state
         gameplay_data.next_state_history[counter] = next_state
@@ -269,24 +205,10 @@ def preprocessGameplayData(
     # random sample from gameplay_data
     sample_idxs = np.random.choice(len(gameplay_data), size=sample_size)
 
-    # for element in [gameplay_data.done_history[idx] for idx in sample_idxs]:
-    #     print("element type: ", type(element))
+
 
     # print("gameplay_data.state_history: ", gameplay_data.state_history)
-    # state_sample = torch.cat([gameplay_data.state_history[idx] for idx in sample_idxs])
-    # next_state_sample = torch.cat([gameplay_data.next_state_history[idx] for idx in sample_idxs])
-    # action_sample = torch.tensor(
-    #     [gameplay_data.action_history[idx] for idx in sample_idxs],
-    #     device = dev
-    # )
-    # reward_sample = torch.tensor(
-    #     [gameplay_data.reward_history[idx] for idx in sample_idxs],
-    #     device = dev
-    # )
-    # done_sample = torch.tensor(
-    #     [float(gameplay_data.done_history[idx]) for idx in sample_idxs],
-    #     device = dev
-    # )
+
     # initialize new preprocessed gameplay data
     state_history_size = (sample_size, 1, 210, 160)
     next_state_history_size = (sample_size, 1, 210, 160)
