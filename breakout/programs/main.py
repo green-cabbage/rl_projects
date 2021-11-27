@@ -1,5 +1,5 @@
 from models import BreakOutAgent
-from pipeline import train
+from pipeline import train_loop
 import gym
 
 def main():
@@ -28,13 +28,13 @@ def main():
         activation = activation
     )
     # start gym breakout
-    env = gym.make('ALE/Breakout-v5', render_mode='human')
-    nepochs = 2000
+    env = gym.make('ALE/Breakout-v5')#, render_mode='human')
+    nepochs = 20000
     game_step_limit =  150
     sample_size = game_step_limit //2
     saveEveryN = 10
     lr = 0.0001
-    train(
+    train_loop(
         model,
         env,
         nepochs,
@@ -44,6 +44,7 @@ def main():
         dev,
         lr = lr
     )
+    
     env.close()
 
 
