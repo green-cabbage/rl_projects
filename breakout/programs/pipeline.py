@@ -11,13 +11,15 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import TypeVar, List, Tuple
-from datetime import datetime
 import os
+import pandas as pd
 # import sklearn.preprocessing as pre 
 
 gp_data = TypeVar("Gameplay Data")
+eps_class = TypeVar("Epsilong Class")
 tch_tensor = TypeVar("tch_tensor")
 np_array = TypeVar("np_array")
+
 
 class GameplayData():
     """
@@ -60,6 +62,27 @@ class GameplayData():
         del self.reward_history
         del self.done_history
 
+class Epsilon():
+    """
+    simple class to record epsilon value throughout the 
+    function calls
+    """
+    def __init__(self):
+        self.epsilon_ = 1.0  # Epsilon greedy parameter
+        self.epsilon_min_ = 0.1  # Minimum epsilon greedy parameter
+        self.epsilon_max_ = 1.0  # Maximum epsilon greedy parameter
+        self.epsilon_decrease_norm_ = 1000000.0
+        # Rate at which to reduce chance of random action being taken
+        self.epsilon_interval_ = (
+            (self.epsilon_max_ - self.epsilon_min_) /self.epsilon_decrease_norm_ 
+        )
+
+    def update(self):
+        self.epsilon_ -= self.epsilon_interval_
+        self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
+
+    def __str__(self):
+        return str(self.epsilon_)
 
 def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     """
@@ -76,6 +99,7 @@ def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     # saving filter for test
     # np.savetxt(f"state_filtered.csv", state_filtered[0,0,:,:], delimiter=",")
     return torch.tensor(state_filtered, device = dev).float()
+
 
 def takeRandomAction(policy: tch_tensor, epsilon =0):
     """
@@ -109,13 +133,16 @@ def takeRandomAction(policy: tch_tensor, epsilon =0):
 def playGameForTraining(
     model, 
     env, 
-    game_step_limit, 
-    dev = "cpu",
-    epsilon = 0):
+    game_step_limit : int, 
+    epsilon : eps_class,
+    dev = "cpu"):
     """
+    params:
+    epsilon: Epsilon class instance
     """
     # print("epsilon: ", epsilon)
     # gameplay_data = GameplayData()
+    random_action_counter_limit = 50000
 
     state_history_size = (game_step_limit, 1, 210, 160)
     next_state_history_size = (game_step_limit, 1, 210, 160)
@@ -139,6 +166,7 @@ def playGameForTraining(
     state = filterState(raw_state, dev = dev)
     # print("starting playGameForTraining")
     counter = 0
+    reward_tally = 0 
     while True:
         
         # print("state shape: ", state.shape)
@@ -148,13 +176,14 @@ def playGameForTraining(
         
         # print("policy shape: ", policy.shape)
         # print("policy[0] shape: ", policy[0].shape)
-        
-        
-       
-            
-
-        action = takeRandomAction(policy, epsilon = epsilon)
+ 
+        if counter < random_action_counter_limit:
+            current_eps = 1.0
+        else: 
+            current_eps = epsilon.epsilon_
+        action = takeRandomAction(policy, epsilon = current_eps)
         raw_next_state, reward, done, _ = env.step(action)
+        reward_tally += reward
         # filter the next state
 
             
@@ -182,8 +211,8 @@ def playGameForTraining(
             # filter the state
             state = filterState(raw_state, dev = dev)
             # print("done!")
-
-    return gameplay_data
+    avg_reward = reward_tally/game_step_limit
+    return gameplay_data, avg_reward
 
 def loss_fn(
     prediction : tch_tensor,
@@ -240,7 +269,7 @@ def preprocessGameplayData(
 
     
     # delete preprocessed_gameplay_data
-    del gameplay_data
+    # del gameplay_data
     return preprocessed_gameplay_data
     
 def trainOneBatch(
@@ -329,15 +358,15 @@ def train_loop(
 
     # initialize optim
     optim = torch.optim.Adam(model.parameters(), lr=lr)
-    epsilon_min = 0.05
-    epsilon_counter = 0.6
+    epsilon = Epsilon()
+    column_names = ["epoch", "avg_reward", "epsilon"]
+    avg_reward_df = pd.DataFrame(columns = column_names)
     for epoch in range(nepochs):
-        print("epoch: ", epoch)
-        epsilon_counter -= 0.01
-        epsilon = max(epsilon_counter, epsilon_min)
+        # print("epoch: ", epoch)
+        epsilon.update()
         # we intreprete epsilon == 0 being no exploration
         # and epsilon == 1 being always exploration
-        gameplay_data = playGameForTraining(
+        gameplay_data, avg_reward = playGameForTraining(
             model,
             env,
             game_step_limit, 
@@ -353,13 +382,28 @@ def train_loop(
         del preprocessed_gameplay_data
 
         
-        # if epoch % saveEveryN ==0:
-        #     # save model
-        #     model_save_path = save_path + f"/Epoch{epoch}"
-        #     if not os.path.exists(model_save_path):
-        #         os.mkdir(model_save_path)
-        #     torch.save(model,model_save_path + "/model.pt")
-        #     # # test
-        #     # test()
+        # add data to avg_reward_df
+        if epoch % (saveEveryN//2) ==0:
+            avg_reward_df = avg_reward_df.append(
+                            {
+                                column_names[0]: epoch, 
+                                column_names[1]: avg_reward,
+                                column_names[2]: epsilon
+                            },  
+                            ignore_index = True
+            )
+        if epoch % saveEveryN ==0:
+            print("epoch: ", epoch)
+            print("epsilon: ", epsilon)
+            # save model
+            model_save_path = save_path + f"/Epoch{epoch}"
+            if not os.path.exists(model_save_path):
+                os.mkdir(model_save_path)
+            torch.save(model,model_save_path + "/model.pt")
+
+            
+            avg_reward_df.to_csv(model_save_path + "/avg_rewards.csv")
+            # # test
+            # test()
 
         

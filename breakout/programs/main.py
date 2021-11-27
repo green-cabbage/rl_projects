@@ -1,6 +1,8 @@
 from models import BreakOutAgent
 from pipeline import train_loop
 import gym
+from datetime import datetime
+import os
 
 def main():
     # input shape: 210x160, image with 3 channels, but we 
@@ -29,24 +31,28 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5')#, render_mode='human')
-    nepochs = 20000
-    game_step_limit =  150
-    sample_size = game_step_limit //2
-    saveEveryN = 10
+    nepochs = 1201
+    game_step_limit =  10000
+    batch_size = game_step_limit //2
+    saveEveryN = 20
     lr = 0.0001
-    # save_path = \
-    #     f"../results/modelSaves/GSL{game_step_limit}_SamS{sample_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
-    # if not os.path.exists(save_path):
-    #     os.mkdir(save_path)
+    gamma = 0.99
+    hidden_layer_depth = layer_depth-2
+    cnn_depth = len(conv_params)
+    save_path = \
+        f"../results/modelSaves/NCh{n_channels}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+    if not os.path.exists(save_path):
+        os.mkdir(save_path)
     train_loop(
         model,
         env,
         nepochs,
         saveEveryN, 
         game_step_limit,
-        sample_size,
+        batch_size,
         dev,
         lr = lr,
+        gamma = gamma,
         save_path = save_path
     )
     
