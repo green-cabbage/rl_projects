@@ -323,11 +323,9 @@ def train_loop(
     sample_size,
     dev,
     lr = 0.001,
-    gamma = 0.99):
-    # save_path = \
-    #     f"../results/modelSaves/GSL{game_step_limit}_SamS{sample_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
-    # if not os.path.exists(save_path):
-    #     os.mkdir(save_path)
+    gamma = 0.99,
+    save_path = "."):
+    
 
     # initialize optim
     optim = torch.optim.Adam(model.parameters(), lr=lr)
