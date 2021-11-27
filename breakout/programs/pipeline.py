@@ -13,6 +13,7 @@ import numpy as np
 from typing import TypeVar, List, Tuple
 import os
 import pandas as pd
+import copy
 # import sklearn.preprocessing as pre 
 
 gp_data = TypeVar("Gameplay Data")
@@ -71,20 +72,31 @@ class Epsilon():
         self.epsilon_ = 1.0  # Epsilon greedy parameter
         self.epsilon_min_ = 0.1  # Minimum epsilon greedy parameter
         self.epsilon_max_ = 1.0  # Maximum epsilon greedy parameter
-        self.epsilon_decrease_norm_ = 1000000.0
+        self.total_epsilon_decrease_steps_ = 1000000.0
         # Rate at which to reduce chance of random action being taken
         self.epsilon_interval_ = (
-            (self.epsilon_max_ - self.epsilon_min_) /self.epsilon_decrease_norm_ 
+            (self.epsilon_max_ - self.epsilon_min_) /self.total_epsilon_decrease_steps_ 
         )
-
+        print("self.epsilon_interval_: ", self.epsilon_interval_)
+        self.random_action_counter_limit_ = 50000
+        self.counter_ = 0
     def update(self):
         self.epsilon_ -= self.epsilon_interval_
         self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
+        self.counter_ += 1
+        # print("self.epsilon_: ", self.epsilon_)
+
+    def doRandomAction_q(self):
+        return True if self.counter_ < self.random_action_counter_limit_ else False
 
     def __str__(self):
         return str(self.epsilon_)
 
-def filterState(state : np_array, dev= "cpu") -> tch_tensor:
+def filterState(
+    current_state : tch_tensor, 
+    raw_state : np_array, 
+    timestep_size : int,
+    dev= "cpu") -> tch_tensor:
     """
     we assume the breakout state is np array of
     (210, 160, 3) shape
@@ -93,12 +105,38 @@ def filterState(state : np_array, dev= "cpu") -> tch_tensor:
     returining the array as torch tensor
     """
     # print("raw state shape: ", state.shape)
-    H, W, C = state.shape
-    state_filtered = state[:,:,0].reshape((1, 1, H, W)) 
-    state_filtered[state_filtered != 0] = 1
-    # saving filter for test
-    # np.savetxt(f"state_filtered.csv", state_filtered[0,0,:,:], delimiter=",")
-    return torch.tensor(state_filtered, device = dev).float()
+    if current_state == None: # if start of the game
+        H, W, C = raw_state.shape
+        current_state = torch.empty(
+            ((1, timestep_size, H, W)), 
+            device = dev
+        )
+        for idx in range(timestep_size):
+            current_state[:,idx,:,:] = torch.tensor(
+                raw_state[:,:,0],
+                device = dev
+            ).float()
+        # turn various color values to just one
+        current_state[current_state != 0] = 1
+        # saving filter for test
+        # np.savetxt(f"current_state.csv", current_state[0,0,:,:], delimiter=",")
+    else:
+        # note timestep_size == T  
+        N, T, H, W = current_state.shape
+        if T > 1 :# reassign values like putting appending a queue
+        # idx == 0 being the most recent
+            for idx in range(1, T):
+                current_state[:,idx-1,:,:] = current_state[:,idx,:,:]
+        # plug in a new element
+        raw_state = torch.tensor(raw_state[:,:,0], device = dev).float()
+        # turn various color values to just one
+        raw_state[raw_state != 0] = 1
+        current_state[:,0,:,:] = raw_state
+
+    # print("current_state: ", current_state.shape )
+    return current_state
+
+
 
 
 def takeRandomAction(policy: tch_tensor, epsilon =0):
@@ -132,6 +170,7 @@ def takeRandomAction(policy: tch_tensor, epsilon =0):
 
 def playGameForTraining(
     model, 
+    n_timesteps : int,
     env, 
     game_step_limit : int, 
     epsilon : eps_class,
@@ -142,10 +181,12 @@ def playGameForTraining(
     """
     # print("epsilon: ", epsilon)
     # gameplay_data = GameplayData()
-    random_action_counter_limit = 50000
+    
 
-    state_history_size = (game_step_limit, 1, 210, 160)
-    next_state_history_size = (game_step_limit, 1, 210, 160)
+    # state_history_size = (game_step_limit, 1, 210, 160)
+    # next_state_history_size = (game_step_limit, 1, 210, 160)
+    state_history_size = (game_step_limit, n_timesteps, 210, 160)
+    next_state_history_size = (game_step_limit, n_timesteps, 210, 160)
     action_history_size = (game_step_limit,)
     reward_history_size = (game_step_limit,)
     done_history_size = (game_step_limit,)
@@ -163,7 +204,7 @@ def playGameForTraining(
     raw_state = env.reset()
     raw_state = env.reset()
     # filter the state
-    state = filterState(raw_state, dev = dev)
+    state = filterState(None, raw_state, n_timesteps, dev = dev)
     # print("starting playGameForTraining")
     counter = 0
     reward_tally = 0 
@@ -177,7 +218,7 @@ def playGameForTraining(
         # print("policy shape: ", policy.shape)
         # print("policy[0] shape: ", policy[0].shape)
  
-        if counter < random_action_counter_limit:
+        if epsilon.doRandomAction_q():
             current_eps = 1.0
         else: 
             current_eps = epsilon.epsilon_
@@ -188,7 +229,7 @@ def playGameForTraining(
 
             
 
-        next_state = filterState(raw_next_state, dev = dev)
+        next_state = filterState(state, raw_next_state, n_timesteps, dev = dev)
         # print("next state shape: ", next_state.shape)
 
         # take gameplay data
@@ -209,7 +250,7 @@ def playGameForTraining(
         if done:
             raw_state = env.reset()
             # filter the state
-            state = filterState(raw_state, dev = dev)
+            state = filterState(None, raw_state, n_timesteps, dev = dev)
             # print("done!")
     avg_reward = reward_tally/game_step_limit
     return gameplay_data, avg_reward
@@ -225,6 +266,7 @@ def loss_fn(
 
 def preprocessGameplayData(
     gameplay_data : gp_data,
+    n_timesteps : int,
     sample_size : int,
     dev = "cpu"):
     """
@@ -239,8 +281,8 @@ def preprocessGameplayData(
     # print("gameplay_data.state_history: ", gameplay_data.state_history)
 
     # initialize new preprocessed gameplay data
-    state_history_size = (sample_size, 1, 210, 160)
-    next_state_history_size = (sample_size, 1, 210, 160)
+    state_history_size = (sample_size, n_timesteps, 210, 160)
+    next_state_history_size = (sample_size, n_timesteps, 210, 160)
     action_history_size = (sample_size,)
     reward_history_size = (sample_size,)
     done_history_size = (sample_size,)
@@ -345,6 +387,7 @@ def trainOneBatch(
 
 def train_loop(
     model,
+    n_timesteps : int,
     env,
     nepochs,
     saveEveryN,
@@ -368,12 +411,14 @@ def train_loop(
         # and epsilon == 1 being always exploration
         gameplay_data, avg_reward = playGameForTraining(
             model,
+            n_timesteps,
             env,
             game_step_limit, 
             dev = dev,
             epsilon = epsilon)
         preprocessed_gameplay_data = preprocessGameplayData(
             gameplay_data, 
+            n_timesteps,
             sample_size, 
             dev = dev
         )
@@ -388,7 +433,7 @@ def train_loop(
                             {
                                 column_names[0]: epoch, 
                                 column_names[1]: avg_reward,
-                                column_names[2]: epsilon
+                                column_names[2]: epsilon.epsilon_
                             },  
                             ignore_index = True
             )
