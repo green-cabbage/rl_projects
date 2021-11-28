@@ -1,5 +1,5 @@
 from models import BreakOutAgent
-from pipeline import train_loop
+from pipeline import train_loop, Epsilon
 import gym
 from datetime import datetime
 import os
@@ -16,7 +16,7 @@ def main():
     ]
     flatten_nodes = 32*24*18
     hidden_nodes = 512
-    output_nodes = 18
+    output_nodes = 3
     hidden_layer_depth = 1 # one hidden layer
     fcn_params = (
         flatten_nodes,
@@ -35,24 +35,32 @@ def main():
     env = gym.make('ALE/Breakout-v5')#, render_mode='human')
     nepochs = 2000000
     # game_step_limit =  10000
-    game_step_limit =  int(10000 *0.38)
+    # game_step_limit =  int(10000 *0.4)
+    game_step_limit =  int(10000 *0.35)
     print("game_step_limit: ", game_step_limit)
-    batch_size = 32 #game_step_limit //3
+    # batch_size = 32
+    batch_size = 128 # game_step_limit//3
     saveEveryN = 200
     lr = 0.00025
     gamma = 0.99
     cnn_depth = len(conv_params)
     # loss_type = "MSE"
     loss_type = "Huber"
+    # total_epsilon_decrease_steps = 1000000.0
+    # random_action_counter_limit = 50000
+    total_epsilon_decrease_steps = 50000.0
+    random_action_counter_limit = 2500
     save_path = \
-        f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+        f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_EpsD{total_epsilon_decrease_steps}_RACL{random_action_counter_limit}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
     if not os.path.exists(save_path):
         os.mkdir(save_path)
+    epsilon = Epsilon(total_epsilon_decrease_steps)
     train_loop(
         model,
         n_timesteps,
         env,
         nepochs,
+        epsilon,
         saveEveryN, 
         game_step_limit,
         batch_size,

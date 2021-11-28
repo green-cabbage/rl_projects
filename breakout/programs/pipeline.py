@@ -68,17 +68,20 @@ class Epsilon():
     simple class to record epsilon value throughout the 
     function calls
     """
-    def __init__(self):
+    def __init__(
+        self, 
+        total_epsilon_decrease_steps = 1000000.0,
+        random_action_counter_limit = 50000):
         self.epsilon_ = 1.0  # Epsilon greedy parameter
         self.epsilon_min_ = 0.1  # Minimum epsilon greedy parameter
         self.epsilon_max_ = 1.0  # Maximum epsilon greedy parameter
-        self.total_epsilon_decrease_steps_ = 1000000.0
+        self.total_epsilon_decrease_steps_ =  total_epsilon_decrease_steps 
         # Rate at which to reduce chance of random action being taken
         self.epsilon_interval_ = (
             (self.epsilon_max_ - self.epsilon_min_) /self.total_epsilon_decrease_steps_ 
         )
         print("self.epsilon_interval_: ", self.epsilon_interval_)
-        self.random_action_counter_limit_ = 50000
+        self.random_action_counter_limit_ = random_action_counter_limit
         self.counter_ = 0
     def update(self):
         self.epsilon_ -= self.epsilon_interval_
@@ -90,7 +93,10 @@ class Epsilon():
         return True if self.counter_ < self.random_action_counter_limit_ else False
 
     def __str__(self):
-        return str(self.epsilon_)
+        if self.doRandomAction_q():
+            return str(1.0)
+        else:
+            return str(self.epsilon_)
 
 def filterState(
     current_state : tch_tensor, 
@@ -191,7 +197,6 @@ def takeRandomAction(policy: tch_tensor, epsilon =0):
         action = np.argmax(np_policy)
         # print("exploitation")
     
-
     # print("action: ", action)
     return action
 
@@ -235,6 +240,10 @@ def playGameForTraining(
     # print("starting playGameForTraining")
     counter = 0
     reward_tally = 0 
+    """
+    9 is left  10 is do nothing 11 is right
+    """
+    action_map = {0 : 9, 1 : 10, 2: 11}
     while True:
         
         # print("state shape: ", state.shape)
@@ -250,7 +259,7 @@ def playGameForTraining(
         else: 
             current_eps = epsilon.epsilon_
         action = takeRandomAction(policy, epsilon = current_eps)
-        raw_next_state, reward, done, _ = env.step(action)
+        raw_next_state, reward, done, _ = env.step(action_map[action])
         reward_tally += reward
         # filter the next state
 
@@ -423,6 +432,7 @@ def train_loop(
     n_timesteps : int,
     env,
     nepochs,
+    epsilon,
     saveEveryN,
     game_step_limit,
     sample_size,
@@ -435,7 +445,6 @@ def train_loop(
 
     # initialize optim
     optim = torch.optim.Adam(model.parameters(), lr=lr)
-    epsilon = Epsilon()
     column_names = ["epoch", "avg_reward", "epsilon"]
     avg_reward_df = pd.DataFrame(columns = column_names)
     for epoch in range(nepochs):
@@ -469,11 +478,12 @@ def train_loop(
         
         # add data to avg_reward_df
         if epoch % (saveEveryN//2) ==0:
+            eps = print(epsilon)
             avg_reward_df = avg_reward_df.append(
                             {
                                 column_names[0]: epoch, 
                                 column_names[1]: avg_reward,
-                                column_names[2]: epsilon.epsilon_
+                                column_names[2]: eps
                             },  
                             ignore_index = True
             )
