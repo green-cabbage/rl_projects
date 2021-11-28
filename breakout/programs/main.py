@@ -15,14 +15,14 @@ def main():
         (16, 32, 4, 2),
     ]
     flatten_nodes = 32*24*18
-    hidden_nodes = 256
+    hidden_nodes = 512
     output_nodes = 18
-    layer_depth = 3 # one hidden layer
+    hidden_layer_depth = 1 # one hidden layer
     fcn_params = (
         flatten_nodes,
         hidden_nodes,
         output_nodes,
-        layer_depth
+        hidden_layer_depth
     )
     activation = "relu"
     dev = "cuda"
@@ -33,18 +33,19 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5')#, render_mode='human')
-    nepochs = 200000
+    nepochs = 2000000
     # game_step_limit =  10000
     game_step_limit =  int(10000 *0.38)
     print("game_step_limit: ", game_step_limit)
-    batch_size = game_step_limit //2
+    batch_size = 32 #game_step_limit //3
     saveEveryN = 200
     lr = 0.00025
     gamma = 0.99
-    hidden_layer_depth = layer_depth-2
     cnn_depth = len(conv_params)
+    # loss_type = "MSE"
+    loss_type = "Huber"
     save_path = \
-        f"../results/modelSaves/NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+        f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     train_loop(
@@ -58,7 +59,9 @@ def main():
         dev,
         lr = lr,
         gamma = gamma,
+        loss_type = loss_type,
         save_path = save_path
+        
     )
     
     env.close()

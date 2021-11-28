@@ -66,7 +66,7 @@ class BreakOutAgent(nn.Module):
             device = device
         )
         # initialize fcn block
-        flatten_nodes, hidden_nodes, output_nodes, layer_depth = fcn_params
+        flatten_nodes, hidden_nodes, output_nodes, hidden_layer_depth = fcn_params
         self.num_actions = output_nodes
         # flatten_nodes == input_nodes
         fcn_modules = []
@@ -74,12 +74,15 @@ class BreakOutAgent(nn.Module):
             [],
             flatten_nodes,
             output_nodes,
-            layer_depth,
+            hidden_layer_depth + 2,  
             hidden_nodes,
             device,
             activation = activation
         )
+        # pop the last relu activaton
+        fcn_modules.pop(-1)
         self.fcn_block_ = nn.Sequential(*fcn_modules)
+        print("self.fcn_block_: ", self.fcn_block_)
 
 
     def forward(self, X, entropy=0):

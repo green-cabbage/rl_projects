@@ -139,6 +139,36 @@ def filterState(
 
 
 
+# def takeRandomAction(policy: tch_tensor, epsilon =0):
+#     """
+#     we assume policy shape == (1, model.num_actions)
+#     in the future
+#     """
+#     # print("original policy: ", policy)
+#     with torch.no_grad():
+#         np_policy = policy.cpu().numpy()
+#     # floor the negative values to zero and normalize
+#     np_policy[np_policy < 0] = 0
+#     # we can now assume np policy is all positive
+#     # normalize
+    
+
+#     if sum == 0 or np.random.random() < epsilon:
+#         # give uniform distribution for 100% 
+#         # random action
+#         # print("total random action")
+#         num_actions = np_policy.shape[-1]
+#         np_policy[:] = 1/num_actions
+#     else: # normal normalization
+#         np_policy = np_policy / np.sum(np_policy) 
+#     # turn to one dimensional array
+#     np_policy = np_policy[0]
+#     # print("normalized policy: ", np_policy)
+#     action = np.random.choice(len(np_policy), p = np_policy)
+#     # print("action: ", action)
+#     return action
+
+
 def takeRandomAction(policy: tch_tensor, epsilon =0):
     """
     we assume policy shape == (1, model.num_actions)
@@ -147,24 +177,21 @@ def takeRandomAction(policy: tch_tensor, epsilon =0):
     # print("original policy: ", policy)
     with torch.no_grad():
         np_policy = policy.cpu().numpy()
-    # floor the negative values to zero and normalize
-    np_policy[np_policy < 0] = 0
-    # we can now assume np policy is all positive
-    # normalize
-    
 
-    if sum == 0 or np.random.random() < epsilon:
-        # give uniform distribution for 100% 
-        # random action
-        # print("total random action")
-        num_actions = np_policy.shape[-1]
-        np_policy[:] = 1/num_actions
-    else: # normal normalization
-        np_policy = np_policy / np.sum(np_policy) 
     # turn to one dimensional array
     np_policy = np_policy[0]
-    # print("normalized policy: ", np_policy)
-    action = np.random.choice(len(np_policy), p = np_policy)
+    # print("np_policy shape: ", np_policy.shape)
+
+    if np.random.random() < epsilon:
+        # give uniform distribution for 100% 
+        # random action
+        action = np.random.choice(len(np_policy))
+        # print("exploration")
+    else: # normal normalization
+        action = np.argmax(np_policy)
+        # print("exploitation")
+    
+
     # print("action: ", action)
     return action
 
@@ -257,12 +284,17 @@ def playGameForTraining(
 
 def loss_fn(
     prediction : tch_tensor,
-    label : tch_tensor):
+    label : tch_tensor,
+    loss_type = "MSE"):
     """
     loss function used in model training
     return: loss scalar value (idk the official name)
     """
-    return nn.MSELoss()(prediction, label)
+    if loss_type == "MSE":
+        loss_variable = nn.MSELoss()
+    elif loss_type == "Huber":
+        loss_variable = nn.HuberLoss()
+    return loss_variable(prediction, label)
 
 def preprocessGameplayData(
     gameplay_data : gp_data,
@@ -318,7 +350,8 @@ def trainOneBatch(
     model,
     optim,
     preprocessed_gameplay_data: gp_data,
-    gamma : float):
+    gamma : float,
+    loss_type = "MSE"):
     """
     params:
     preprocessed_gameplay_data
@@ -375,7 +408,7 @@ def trainOneBatch(
     # print("masks shape: ", masks.shape)
     final_prediction = torch.sum(torch.multiply(q_pred, masks), dim = 1)
     # print("final_prediction shape: ", final_prediction.shape)
-    loss = loss_fn(final_prediction, updated_q_values)
+    loss = loss_fn(final_prediction, updated_q_values, loss_type = loss_type)
     # print("loss value: ", loss)
     loss.backward()
     optim.step()
@@ -396,6 +429,7 @@ def train_loop(
     dev,
     lr = 0.001,
     gamma = 0.99,
+    loss_type = "MSE",
     save_path = "."):
     
 
@@ -422,7 +456,13 @@ def train_loop(
             sample_size, 
             dev = dev
         )
-        trainOneBatch(model, optim, preprocessed_gameplay_data, gamma)
+        trainOneBatch(
+            model, 
+            optim, 
+            preprocessed_gameplay_data, 
+            gamma, 
+            loss_type = loss_type
+        )
         # delete preprocessed_gameplay_data to save memory
         del preprocessed_gameplay_data
 
