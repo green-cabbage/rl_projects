@@ -130,9 +130,8 @@ def filterState(
         # note timestep_size == T  
         N, T, H, W = current_state.shape
         if T > 1 :# reassign values like putting appending a queue
-        # idx == 0 being the most recent
-            for idx in range(1, T):
-                current_state[:,idx-1,:,:] = current_state[:,idx,:,:]
+        # on the channel dimension with idx == 0 being the most recent
+            current_state[:,1:,:,:] = current_state[:,:-1,:,:]
         # plug in a new element
         raw_state = torch.tensor(raw_state[:,:,0], device = dev).float()
         # turn various color values to just one
