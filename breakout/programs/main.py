@@ -1,15 +1,17 @@
 from models import BreakOutAgent
-from pipeline import train_loop, Epsilon
+# from pipeline import train_loop, Epsilon
+from pipeline_numba import train_loop, Epsilon
 import gym
 from datetime import datetime
 import os
+import time
 
 def main():
     # input shape: 210x160, image with 3 channels, but we 
     # are filtering to just 1 channel
-    # n_timesteps = 1
+    n_timesteps = 1
     # # add in two more frames to manifest ball movement
-    n_timesteps = 3
+    # n_timesteps = 3
     conv_params = [
         (n_timesteps, 16, 8, 4),
         (16, 32, 4, 2),
@@ -33,23 +35,26 @@ def main():
     )
     # start gym breakout
     env = gym.make('ALE/Breakout-v5')#, render_mode='human')
+    # nepochs = 400
     nepochs = 2000000
     # game_step_limit =  10000
     # game_step_limit =  int(10000 *0.4)
-    game_step_limit =  int(10000 *0.35)
-    print("game_step_limit: ", game_step_limit)
-    # batch_size = 32
-    batch_size = 128 # game_step_limit//3
-    saveEveryN = 200
-    lr = 0.00025
+    # game_step_limit =  int(10000 *0.01) # 0.35
+    
+    saveEveryN = 4000
+    
     gamma = 0.99
     cnn_depth = len(conv_params)
     # loss_type = "MSE"
     loss_type = "Huber"
     # total_epsilon_decrease_steps = 1000000.0
     # random_action_counter_limit = 50000
-    total_epsilon_decrease_steps = 50000.0
-    random_action_counter_limit = 2500
+    eps_const = 15
+    game_step_limit =  10000 // eps_const
+    batch_size = 32 * eps_const
+    lr = 0.00025 #* eps_const/2
+    total_epsilon_decrease_steps = 1000000.0 / eps_const
+    random_action_counter_limit = 50000 // eps_const
     save_path = \
         f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_EpsD{total_epsilon_decrease_steps}_RACL{random_action_counter_limit}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
     if not os.path.exists(save_path):
@@ -73,7 +78,12 @@ def main():
     )
     
     env.close()
+    return save_path
 
 
 if __name__ == '__main__':
-    main()
+    start = time.time()
+    save_path = main()
+    end = time.time()
+    print(f"run {save_path}")
+    print("Elapsed time = %s" % (end - start))
