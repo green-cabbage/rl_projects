@@ -9,9 +9,9 @@ import time
 def main():
     # input shape: 210x160, image with 3 channels, but we 
     # are filtering to just 1 channel
-    n_timesteps = 1
+    # n_timesteps = 1
     # # add in two more frames to manifest ball movement
-    # n_timesteps = 3
+    n_timesteps = 3
     conv_params = [
         (n_timesteps, 16, 8, 4),
         (16, 32, 4, 2),
@@ -41,7 +41,7 @@ def main():
     # game_step_limit =  int(10000 *0.4)
     # game_step_limit =  int(10000 *0.01) # 0.35
     
-    saveEveryN = 4000
+    saveEveryN = 100
     
     gamma = 0.99
     cnn_depth = len(conv_params)
@@ -49,17 +49,22 @@ def main():
     loss_type = "Huber"
     # total_epsilon_decrease_steps = 1000000.0
     # random_action_counter_limit = 50000
-    eps_const = 15
-    game_step_limit =  10000 // eps_const
-    batch_size = 32 * eps_const
+    eps_const = 10
+    batch_size = 32
+    game_step_limit =  batch_size*eps_const
+    train_num_per_run = 100
     lr = 0.00025 #* eps_const/2
-    total_epsilon_decrease_steps = 1000000.0 / eps_const
-    random_action_counter_limit = 50000 // eps_const
+    total_epsilon_decrease_steps = 1000000.0 #/ eps_const
+    random_action_counter_limit = 50000 #// eps_const
+    # train after every 4 actions and batch_size is satisfactory
     save_path = \
         f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_EpsD{total_epsilon_decrease_steps}_RACL{random_action_counter_limit}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
     if not os.path.exists(save_path):
         os.mkdir(save_path)
-    epsilon = Epsilon(total_epsilon_decrease_steps)
+    epsilon = Epsilon(
+        total_epsilon_decrease_steps = total_epsilon_decrease_steps, 
+        random_action_counter_limit = random_action_counter_limit
+        )
     train_loop(
         model,
         n_timesteps,
@@ -69,6 +74,7 @@ def main():
         saveEveryN, 
         game_step_limit,
         batch_size,
+        train_num_per_run,
         dev,
         lr = lr,
         gamma = gamma,

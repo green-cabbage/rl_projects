@@ -85,8 +85,11 @@ class Epsilon():
         self.random_action_counter_limit_ = random_action_counter_limit
         self.counter_ = 0
     def update(self):
-        self.epsilon_ -= self.epsilon_interval_
-        self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
+        # self.epsilon_ -= self.epsilon_interval_
+        # self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
+        if self.counter_ > self.random_action_counter_limit_:
+            self.epsilon_ -= self.epsilon_interval_
+            self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
         self.counter_ += 1
         # print("self.epsilon_: ", self.epsilon_)
 
@@ -281,7 +284,7 @@ def playGameForTraining(
     """
     action_map = {0 : 9, 1 : 10, 2: 11}
     while True:
-        
+        epsilon.update()
         # print("state shape: ", state.shape)
         with torch.no_grad():
             policy = model(torch.from_numpy(state).to(dev)).cpu().numpy()
@@ -485,6 +488,7 @@ def train_loop(
     saveEveryN,
     game_step_limit,
     sample_size,
+    train_num_per_run : int,
     dev,
     lr = 0.001,
     gamma = 0.99,
@@ -494,11 +498,11 @@ def train_loop(
 
     # initialize optim
     optim = torch.optim.Adam(model.parameters(), lr=lr)
-    column_names = ["epoch", "avg_reward", "epsilon"]
+    column_names = ["epoch", "avg_reward", "epsilon", "total steps played"]
     avg_reward_df = pd.DataFrame(columns = column_names)
     for epoch in range(nepochs):
         # print("epoch: ", epoch)
-        epsilon.update()
+        
         # we intreprete epsilon == 0 being no exploration
         # and epsilon == 1 being always exploration
         gameplay_tuple, avg_reward = playGameForTraining(
@@ -508,33 +512,36 @@ def train_loop(
             game_step_limit, 
             dev = dev,
             epsilon = epsilon)
-        preprocessed_gameplay_data = preprocessGameplayData(
-            gameplay_tuple, 
-            n_timesteps,
-            sample_size, 
-            dev = dev
-        )
-        trainOneBatch(
-            model, 
-            optim, 
-            gameplay_tuple,
-            gamma, 
-            loss_type = loss_type,
-            dev = dev
-        )
-        # delete preprocessed_gameplay_data to save memory
-        del preprocessed_gameplay_data
+        for _ in range(train_num_per_run):    
+            preprocessed_gameplay_data = preprocessGameplayData(
+                gameplay_tuple, 
+                n_timesteps,
+                sample_size, 
+                dev = dev
+            )
+            trainOneBatch(
+                model, 
+                optim, 
+                gameplay_tuple,
+                gamma, 
+                loss_type = loss_type,
+                dev = dev
+            )
+            # delete preprocessed_gameplay_data to save memory
+            del preprocessed_gameplay_data
 
             
         if epoch % saveEveryN ==0:
             print("epoch: ", epoch)
             print("epsilon: ", epsilon)
             eps = str(epsilon)
+            eps_counter = epsilon.counter_
             avg_reward_df = avg_reward_df.append(
                             {
                                 column_names[0]: epoch, 
                                 column_names[1]: avg_reward,
-                                column_names[2]: eps
+                                column_names[2]: eps,
+                                column_names[3]: eps_counter
                             },  
                             ignore_index = True
             )
