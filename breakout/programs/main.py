@@ -1,6 +1,6 @@
 from models import BreakOutAgent
-# from pipeline import train_loop, Epsilon
-from pipeline_numba import train_loop, Epsilon
+# from pipeline import trainloop, Epsilon
+from pipeline_numba import trainloop, Epsilon
 import gym
 from datetime import datetime
 import os
@@ -51,21 +51,22 @@ def main():
     # random_action_counter_limit = 50000
     eps_const = 10
     batch_size = 32
-    game_step_limit =  batch_size*eps_const
-    train_num_per_run = 100
+    # game_step_limit =  batch_size*eps_const
+    game_step_limit =  10000
+    train_num_per_run = 112
     lr = 0.00025 #* eps_const/2
-    total_epsilon_decrease_steps = 1000000.0 #/ eps_const
+    total_epsilon_decrease_steps = 30* 1000000.0 #4*1000000.0 #/ eps_const
     random_action_counter_limit = 50000 #// eps_const
     # train after every 4 actions and batch_size is satisfactory
     save_path = \
-        f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_Lr{lr}_G{gamma}_EpsD{total_epsilon_decrease_steps}_RACL{random_action_counter_limit}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
+        f"../results/modelSaves/Loss{loss_type}_NCh{n_timesteps}_ConvD{cnn_depth}_HN{hidden_nodes}_HLD{hidden_layer_depth}_A{activation}_GSL{game_step_limit}_BchS{batch_size}_TNPR{train_num_per_run}_Lr{lr}_G{gamma}_EpsD{total_epsilon_decrease_steps}_RACL{random_action_counter_limit}_Date{datetime.now().strftime('%b%d_%H-%M-%S')}"
     if not os.path.exists(save_path):
         os.mkdir(save_path)
     epsilon = Epsilon(
         total_epsilon_decrease_steps = total_epsilon_decrease_steps, 
         random_action_counter_limit = random_action_counter_limit
         )
-    train_loop(
+    trainloop(
         model,
         n_timesteps,
         env,

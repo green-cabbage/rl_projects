@@ -429,7 +429,7 @@ def trainOneBatch(
 #     """
 
 
-def train_loop(
+def trainloop(
     model,
     n_timesteps : int,
     env,

@@ -479,7 +479,7 @@ def trainOneBatch(
 #     """
 
 
-def train_loop(
+def trainloop(
     model,
     n_timesteps : int,
     env,
@@ -557,3 +557,19 @@ def train_loop(
             # test()
 
         
+# def play(
+#     env_param : str, 
+#     model_save_path : str):
+#     """
+#     allow human to see the performance of 
+#     """
+#     env = gym.make(env_param, render_mode='human')
+#     model = torch.load(model_save_path)
+#     for step in range(n_steps):
+        
+
+def resumeTrainloop():
+
+
+
+    trainloop
