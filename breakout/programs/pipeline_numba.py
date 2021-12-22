@@ -71,6 +71,7 @@ class Epsilon():
     """
     def __init__(
         self, 
+        start_counter = 0,
         total_epsilon_decrease_steps = 1000000.0,
         random_action_counter_limit = 50000):
         self.epsilon_ = 1.0  # Epsilon greedy parameter
@@ -83,7 +84,7 @@ class Epsilon():
         )
         # print("self.epsilon_interval_: ", self.epsilon_interval_)
         self.random_action_counter_limit_ = random_action_counter_limit
-        self.counter_ = 0
+        self.counter_ = start_counter
     def update(self):
         # self.epsilon_ -= self.epsilon_interval_
         # self.epsilon_ = max(self.epsilon_, self.epsilon_min_)
@@ -115,7 +116,10 @@ class Epsilon():
 #                 raw_state[idx, jdx] = 1
 #     return raw_state
 
-@numba.njit(numba.uint8[:,:](numba.uint8[:,:]))
+@numba.njit(
+    numba.uint8[:,:](numba.uint8[:,:]),
+    # cache = True
+    )
 def changeNonzeroValues(raw_state : np_array):
     """
     We assume raw_state is 2 dimensional
@@ -130,6 +134,7 @@ def changeNonzeroValues(raw_state : np_array):
 
 @numba.njit(
     numba.float32[:,:,:,:](numba.float32[:,:,:,:], numba.uint8[:,:,:], numba.boolean),
+    # cache = True
     # parallel=True
 )
 def filterState(
@@ -217,6 +222,7 @@ def filterState(
 
 @numba.njit(
     numba.int64(numba.float32[:,:], numba.int64), 
+    # cache = True
     # parallel=True
 )
 def takeRandomAction(policy: np_array, epsilon = 0):
@@ -353,10 +359,9 @@ def loss_fn(
     return loss_variable(prediction, label)
 
 def preprocessGameplayData(
-    gameplay_tuple : gp_data,
+    gameplay_tuple : Tuple[np_array],
     n_timesteps : int,
-    sample_size : int,
-    dev = "cpu"):
+    batch_size : int):
     """
     preprocess the gameplay data for training
     delte gameplay_data when done
@@ -364,20 +369,20 @@ def preprocessGameplayData(
     state_history, next_state_history, action_history, reward_history, done_history \
         = gameplay_tuple
     # random sample from gameplay_data
-    sample_idxs = np.random.choice(len(done_history), size=sample_size)
+    sample_idxs = np.random.choice(len(done_history), size=batch_size)
 
 
 
     # print("gameplay_data.state_history: ", gameplay_data.state_history)
 
     # initialize new preprocessed gameplay data
-    state_history_size = (sample_size, n_timesteps, 210, 160)
-    next_state_history_size = (sample_size, n_timesteps, 210, 160)
-    action_history_size = (sample_size,)
-    reward_history_size = (sample_size,)
-    done_history_size = (sample_size,)
+    state_history_size = (batch_size, n_timesteps, 210, 160)
+    next_state_history_size = (batch_size, n_timesteps, 210, 160)
+    action_history_size = (batch_size,)
+    reward_history_size = (batch_size,)
+    done_history_size = (batch_size,)
 
-    sample_idxs = np.random.choice(len(done_history), size=sample_size)
+    sample_idxs = np.random.choice(len(done_history), size=batch_size)
     state_history = state_history[sample_idxs]
     next_state_history = next_state_history[sample_idxs]
     action_history = action_history[sample_idxs]
@@ -487,17 +492,18 @@ def trainloop(
     epsilon,
     saveEveryN,
     game_step_limit,
-    sample_size,
+    batch_size,
     train_num_per_run : int,
     dev,
     lr = 0.001,
     gamma = 0.99,
     loss_type = "MSE",
-    save_path = "."):
+    save_path = ".",
+    w_decay = 0):
     
 
-    # initialize optim
-    optim = torch.optim.Adam(model.parameters(), lr=lr)
+    # initialize optim 
+    optim = torch.optim.Adam(model.parameters(), lr=lr, weight_decay = w_decay)
     column_names = ["epoch", "avg_reward", "epsilon", "total steps played"]
     avg_reward_df = pd.DataFrame(columns = column_names)
     for epoch in range(nepochs):
@@ -516,8 +522,7 @@ def trainloop(
             preprocessed_gameplay_data = preprocessGameplayData(
                 gameplay_tuple, 
                 n_timesteps,
-                sample_size, 
-                dev = dev
+                batch_size
             )
             trainOneBatch(
                 model, 
@@ -568,8 +573,17 @@ def trainloop(
 #     for step in range(n_steps):
         
 
-def resumeTrainloop():
+# def resumeTrainloop():
 
+#     # obtain information from the save path
+#     # next time, automate this process pls using re package
 
-
-    trainloop
+#     # infer the start counter from epoch number and other 
+#     # information 
+#     start_counter = 
+#     epsilon = Epsilon(
+#         start_counter = start_counter
+#         total_epsilon_decrease_steps = total_epsilon_decrease_steps, 
+#         random_action_counter_limit = random_action_counter_limit
+#         )
+#     trainloop
